@@ -15,6 +15,8 @@ import GHC.Generics
 import Network.Wai.Handler.Warp (run)
 import Servant
 import Servant.Client
+import Data.Aeson
+
 
 
 sampleBook :: Book
@@ -31,7 +33,7 @@ server remoteTable = postBook
        :<|> getBooks
   where -- the aforementioned 'ReqBody' automatically makes this handler
         -- receive a Book argument
-        postBook book =  return sampleBook
+        postBook bookClosure =  return sampleBook
         getBooks      =  return [sampleBook]
 
 bookApi :: Proxy BookApi
@@ -39,3 +41,7 @@ bookApi = Proxy
 
 
 (getAllBooks :<|> postNewBook) = client bookApi
+
+
+test = ( fromJSON.toJSON . JSONClosure . sendBookClosure $ sampleBook) :: Result (JSONClosure (String -> IO Book))
+

@@ -125,4 +125,3 @@ instance (Typeable a) => FromJSON (JSONClosure a) where
    parseJSON _ = fail "JSON Closure requires an object, recieved other"
 
 
-test = JSONClosure . sendBookClosure 
