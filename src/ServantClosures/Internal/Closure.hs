@@ -1,8 +1,11 @@
+{-# LANGUAGE OverloadedStrings #-} -- For the JSON Keys
 {-# LANGUAGE DeriveDataTypeable #-} -- To enable Typeable on the example type
 {-# LANGUAGE DeriveGeneric #-} -- For the Binary instances on the example
-module ServantClosures.Internal.Closure ( sendComicClosure
+{-# LANGUAGE GeneralizedNewtypeDeriving #-} -- To make Closures Web exportable
+module ServantClosures.Internal.Closure ( sendBookClosure
                                         , comicRemoteTable
-                                        , Comic(..)) where
+                                        , JSONClosure(..)
+                                        , Book(..)) where
 
 import Control.Distributed.Static ( Static
                                   , staticLabel
@@ -12,55 +15,114 @@ import Control.Distributed.Static ( Static
                                   , registerStatic
                                   , closure
                                   , initRemoteTable)
+import qualified Data.ByteString.Base64 as B64 
+       
+-- import Data.Text (Text)       
+-- import qualified Data.Text as T
+import qualified Data.Text.Encoding as T       
 import Data.Binary (Binary
                    ,encode
                    ,decode)      
+import Control.Applicative ((<$>))       
 import GHC.Generics (Generic)      
+import Data.Aeson.Types (Parser)       
+import Data.Aeson (ToJSON
+                  ,FromJSON
+                  ,fromJSON
+                  ,Result(..)
+                  ,Value(..)
+                  ,object
+                  ,toJSON
+                  ,parseJSON
+                  ,(.=)
+                  ,(.:))  
+
 import qualified Data.ByteString.Lazy as Lazy 
 import Data.Rank1Dynamic (toDynamic)
 import Data.Rank1Typeable
   ( Typeable)   
   
 
-data Comic = Comic { title:: String
+data Book = Book { title:: String
                    , author :: String }
  deriving (Typeable , Generic)
 
-instance Binary Comic where 
--- | so for some function that operates on a Comic
+instance Binary Book where 
+         
+instance FromJSON Book where
+instance ToJSON Book where 
+-- | so for some function that operates on a Book
 -- to be serialized it first has to be declared static
 
-sendComic :: Comic ->  
+sendBook :: Book ->  
              String -> 
-             IO Comic
-sendComic c newTitle = return $ c{title=newTitle}
+             IO Book
+sendBook c newTitle = return $ c{title=newTitle}
 
 
 -- |Declare it static 
    
-sendComicStatic :: Static (Comic ->
-                           String -> IO Comic)
-sendComicStatic = staticLabel "$sendComic"                           
+sendBookStatic :: Static (Book ->
+                           String -> IO Book)
+sendBookStatic = staticLabel "$sendBook"                           
 
 -- |Define a decoder for the serialized free variables
-decodeComicStatic :: Static (Lazy.ByteString -> Comic)
-decodeComicStatic = staticLabel "$decodeComic"
+decodeBookStatic :: Static (Lazy.ByteString -> Book)
+decodeBookStatic = staticLabel "$decodeBook"
 
 
 -- | Define the remote table
 
 comicRemoteTable :: RemoteTable
-comicRemoteTable = registerStatic "$sendComic" (toDynamic sendComic)
-                   . registerStatic "$decodeComic" (toDynamic (decode :: Lazy.ByteString -> Comic))
+comicRemoteTable = registerStatic "$sendBook" (toDynamic sendBook)
+                   . registerStatic "$decodeBook" (toDynamic (decode :: Lazy.ByteString -> Book))
                    $ initRemoteTable               
 
 
 -- | define the closure
--- note... the first argument to the sendComicstatic is decoded by the decodeComicStatic
+-- note... the first argument to the sendBookstatic is decoded by the decodeBookStatic
 -- so it can be furnished by the Serialization   
-sendComicClosure :: Comic -> Closure (String -> IO Comic)
-sendComicClosure c = closure decoder (encode c)
+sendBookClosure :: Book -> Closure (String -> IO Book)
+sendBookClosure c = closure decoder (encode c)
    where 
-      decoder :: Static (Lazy.ByteString -> String -> IO Comic)
-      decoder = sendComicStatic  `staticCompose` decodeComicStatic
+      decoder :: Static (Lazy.ByteString -> String -> IO Book)
+      decoder = sendBookStatic  `staticCompose` decodeBookStatic
 
+
+-- | The web versions
+
+
+-- | JSONClosure just adds the most important, to and from json stuff
+newtype JSONClosure a = JSONClosure (Closure a)
+ deriving (Eq,Ord,Show,Typeable)
+
+
+
+instance (Typeable a) => ToJSON (JSONClosure a) where 
+  toJSON (JSONClosure c) = object ["jsonClosure" .= internalClosure]
+    where internalClosure = toJSON 
+                          . T.decodeUtf8 
+                          . B64.encode 
+                          . Lazy.toStrict
+                          . encode $ c
+
+
+instance (Typeable a) => FromJSON (JSONClosure a) where
+   parseJSON (Object jclosure) = decodeInternalClosure =<<
+                                 (jclosure .: "jsonClosure" )
+
+     where
+       decodeInternalClosure :: (Typeable a)=> Value -> Parser (JSONClosure a)
+       decodeInternalClosure v = JSONClosure <$> 
+                                 decodeTextAndB64 v
+       decodeTextAndB64 :: (Typeable a) => Value -> Parser (Closure a)
+       decodeTextAndB64 i = case fromJSON i of
+                            (Error e) -> fail e
+                            (Success r) ->   fmap (decode . Lazy.fromStrict )
+                                           . either fail return
+                                           . B64.decode . T.encodeUtf8 $ r
+
+   parseJSON _ = fail "JSON Closure requires an object, recieved other"
+
+
+test = JSONClosure . sendBookClosure 
