@@ -1,6 +1,6 @@
 # servant-with-closures
 
-(This file)[https://github.com/plow-technologies/servant-with-closures/blob/master/src/ServantClosures/Internal/Closure.hs]
+[This file](https://github.com/plow-technologies/servant-with-closures/blob/master/src/ServantClosures/Internal/Closure.hs)
 
 contains a sample implementation of a remoteTable with servant.
 
