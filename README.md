@@ -1,21 +1,10 @@
 # servant-with-closures
 
-TODO: Write description here
+(This file)[https://github.com/plow-technologies/servant-with-closures/blob/master/src/ServantClosures/Internal/Closure.hs]
 
-## Installation
+contains a sample implementation of a remoteTable with servant.
 
-TODO: Write installation instructions here
+Because servant can generate both the client and server side API it makes sense to be used with
+distributed process style closures.
 
-## Usage
-
-TODO: Write usage instructions here
-
-## How to run tests
-
-```
-cabal configure --enable-tests && cabal build && cabal test
-```
-
-## Contributing
-
-TODO: Write contribution instructions here
+This repo is a sketch of how such a thing might be done.
